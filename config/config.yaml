@@ -9,7 +9,7 @@ markets:
     timeframe: "30m"
     exchange: "binanceus"
   - symbol: "CL=F"
-    timeframe: "5m"
+    timeframe: "30m"
     exchange: "yf_oil"
 
 strategies:
