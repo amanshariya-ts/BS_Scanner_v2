@@ -1,20 +1,23 @@
 # alerts/telegram.py
 import requests
 import logging
+import os
 
 log = logging.getLogger(__name__)
 
 class TelegramAlert:
     def __init__(self, bot_token: str, chat_id: str):
-        self.url = f"https://api.telegram.org/bot8836956846:AAFL5BEINJ3VhgLc_I4UoSLIj_By1s8Iy9k/sendMessage"
-        self.chat_id = 1048733397
+        bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", bot_token)
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID", chat_id)
+        self.url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        self.chat_id = chat_id
 
     def send(self, signal) -> None:
         ts = signal.timestamp.strftime("%Y-%m-%d %H:%M UTC")
         if signal.side == "BUY":
-            header = "🟢 BUY — Bullish Liquidity"
+            header = "🟢 Bullish Liq_Cron"
         else:
-            header = "🔴 SELL — Bearish Liquidity"
+            header = "🔴 Bearish Liq_Cron"
 
         msg = (
             f"{header}\n"
