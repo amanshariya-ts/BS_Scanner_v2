@@ -8,8 +8,8 @@ import requests
 log = logging.getLogger(__name__)
 
 SIDE_STYLES = {
-    "BUY": "🟢 Bullish",
-    "SELL": "🔴 Bearish",
+    "BUY": "🟢 Bull",
+    "SELL": "🔴 Bear",
 }
 
 
