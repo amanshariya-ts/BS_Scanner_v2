@@ -1,0 +1,16 @@
+name: Keep-alive
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+permissions:
+  contents: write
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          git config user "signal-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git commit --allow-empty -m "keepalive [skip ci]"
+          git push
