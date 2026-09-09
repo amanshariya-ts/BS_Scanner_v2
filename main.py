@@ -59,8 +59,8 @@ def check_market(cfg, tg, state, symbol, timeframe, exchange_name):
                      f"@ {signal.price} (candle {signal.timestamp}, {age:.0f}m old)")
             if tg.send(signal):
                state.mark_alerted(key, signal.timestamp)
-else:
-    log.warning(f"Send failed — will retry on next run: {key} {signal.timestamp}")
+            else:
+               log.warning(f"Send failed — will retry on next run: {key} {signal.timestamp}")
 
 
 def run_market(cfg, tg, state, symbol, timeframe, exchange_name):
