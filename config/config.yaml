@@ -8,8 +8,8 @@ markets:
   - symbol: "BTC/USDT"
     timeframe: "30m"
     exchange: "binanceus"
-  - symbol: "CL=F"
-    timeframe: "30m"
+  - symbol: "USOil"
+    timeframe: "5m"
     exchange: "yf_oil"
 
 strategies:
