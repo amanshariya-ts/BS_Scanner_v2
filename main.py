@@ -57,8 +57,10 @@ def check_market(cfg, tg, state, symbol, timeframe, exchange_name):
             age = (df.iloc[-1]["timestamp"] - signal.timestamp).total_seconds() / 60
             log.info(f"SIGNAL: {signal.side} {signal.symbol} {signal.timeframe} "
                      f"@ {signal.price} (candle {signal.timestamp}, {age:.0f}m old)")
-            tg.send(signal)
-            state.mark_alerted(key, signal.timestamp)
+            if tg.send(signal):
+               state.mark_alerted(key, signal.timestamp)
+else:
+    log.warning(f"Send failed — will retry on next run: {key} {signal.timestamp}")
 
 
 def run_market(cfg, tg, state, symbol, timeframe, exchange_name):
