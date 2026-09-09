@@ -16,6 +16,7 @@ logging.basicConfig(level=logging.INFO,
 log = logging.getLogger("framework")
 
 RUN_ONCE = os.getenv("RUN_ONCE", "0") == "1"
+BACKFILL_BARS = int(os.getenv("BACKFILL_BARS", "12"))
 
 STRATEGY_REGISTRY = {
     LiquidityPinBars.name: LiquidityPinBars,
@@ -28,59 +29,55 @@ def build_strategies(symbol, timeframe, strategy_cfgs):
             if s.get("enabled", True) and s["name"] in STRATEGY_REGISTRY]
 
 
+def check_market(cfg, tg, state, symbol, timeframe, exchange_name):
+    """Fetch data and evaluate strategies over the backfill window. Returns nothing."""
+    fetcher = create_fetcher(exchange_name)
+    strategies = build_strategies(symbol, timeframe, cfg["strategies"])
+    log.info(f"[{symbol} {timeframe} @ {exchange_name}] watching with {len(strategies)} strategy/ies")
+
+    df = fetcher.fetch_ohlcv(symbol, timeframe,
+                             cfg["polling"]["lookback_bars"]).iloc[:-1]
+
+    for strat in strategies:
+        for i in range(-BACKFILL_BARS, 0):
+            window = df.iloc[:len(df) + i] if i != -1 else df
+            if len(window) < 50:
+                continue
+            try:
+                signal = strat.evaluate(window)
+            except Exception as e:
+                log.error(f"[{symbol} {timeframe}] evaluate error: {e}")
+                continue
+            if signal is None:
+                continue
+            key = f"{signal.symbol}|{signal.timeframe}|{strat.name}"
+            if state.already_alerted(key, signal.timestamp):
+                continue
+            signal.strategy = strat.name
+            age = (df.iloc[-1]["timestamp"] - signal.timestamp).total_seconds() / 60
+            log.info(f"SIGNAL: {signal.side} {signal.symbol} {signal.timeframe} "
+                     f"@ {signal.price} (candle {signal.timestamp}, {age:.0f}m old)")
+            tg.send(signal)
+            state.mark_alerted(key, signal.timestamp)
+
+
 def run_market(cfg, tg, state, symbol, timeframe, exchange_name):
+    if RUN_ONCE:
+        try:
+            check_market(cfg, tg, state, symbol, timeframe, exchange_name)
+        except Exception as e:
+            log.error(f"[{symbol} {timeframe}] one-shot error: {e}")
+        return
+
+    # Daemon mode (local): poll forever.
     fetcher = create_fetcher(exchange_name)
     strategies = build_strategies(symbol, timeframe, cfg["strategies"])
     poller = CandlePoller(fetcher, symbol, timeframe,
                           interval=cfg["polling"]["interval_seconds"],
                           lookback=cfg["polling"]["lookback_bars"])
-    log.info(f"[{symbol} {timeframe} @ {exchange_name}] watching with {len(strategies)} strategy/ies")
-
-      if RUN_ONCE:
-        try:
-            fetcher = create_fetcher(exchange_name)  # move above if already outside
-            df = fetcher.fetch_ohlcv(symbol, timeframe,
-                                     cfg["polling"]["lookback_bars"]).iloc[:-1]
-            backfill = int(os.getenv("BACKFILL_BARS", "12"))
-            for strat in strategies:
-                # evaluate each of the last N closed candles
-                for i in range(-backfill, 0):
-                    window = df.iloc[:len(df) + i] if i != -1 else df
-                    if len(window) < 50:
-                        continue
-                    signal = strat.evaluate(window)
-                    if signal is None:
-                        continue
-                    key = f"{signal.symbol}|{signal.timeframe}|{strat.name}"
-                    if state.already_alerted(key, signal.timestamp):
-                        continue
-                    signal.strategy = strat.name
-                    age = (df.iloc[-1]["timestamp"] - signal.timestamp).total_seconds() / 60
-                    log.info(f"SIGNAL: {signal.side} {signal.symbol} {signal.timeframe} "
-                             f"@ {signal.price} (candle {signal.timestamp}, {age:.0f}m old)")
-                    tg.send(signal)
-                    state.mark_alerted(key, signal.timestamp)
-        except Exception as e:
-            log.error(f"[{symbol} {timeframe}] one-shot error: {e}")
-        return
-
-
-    # Daemon mode (local): poll forever.
     for candle in poller.poll_forever():
         try:
-            df = fetcher.fetch_ohlcv(symbol, timeframe,
-                                     cfg["polling"]["lookback_bars"]).iloc[:-1]
-            for strat in strategies:
-                signal = strat.evaluate(df)
-                if signal is None:
-                    continue
-                key = f"{signal.symbol}|{signal.timeframe}|{strat.name}"
-                if state.already_alerted(key, signal.timestamp):
-                    continue
-                signal.strategy = strat.name
-                log.info(f"SIGNAL: {signal.side} {signal.symbol} {signal.timeframe} @ {signal.price}")
-                tg.send(signal)
-                state.mark_alerted(key, signal.timestamp)
+            check_market(cfg, tg, state, symbol, timeframe, exchange_name)
         except Exception as e:
             log.error(f"[{symbol} {timeframe}] loop error: {e}")
 
@@ -108,7 +105,7 @@ def main():
 
     if RUN_ONCE:
         for t in threads:
-            t.join(timeout=120)   # let all one-shot checks finish
+            t.join(timeout=180)
         return
 
     try:
