@@ -36,25 +36,34 @@ def run_market(cfg, tg, state, symbol, timeframe, exchange_name):
                           lookback=cfg["polling"]["lookback_bars"])
     log.info(f"[{symbol} {timeframe} @ {exchange_name}] watching with {len(strategies)} strategy/ies")
 
-    if RUN_ONCE:
-        # One-shot mode (GitHub Actions): evaluate latest closed candle, exit.
+      if RUN_ONCE:
         try:
+            fetcher = create_fetcher(exchange_name)  # move above if already outside
             df = fetcher.fetch_ohlcv(symbol, timeframe,
                                      cfg["polling"]["lookback_bars"]).iloc[:-1]
+            backfill = int(os.getenv("BACKFILL_BARS", "12"))
             for strat in strategies:
-                signal = strat.evaluate(df)
-                if signal is None:
-                    continue
-                key = f"{signal.symbol}|{signal.timeframe}|{strat.name}"
-                if state.already_alerted(key, signal.timestamp):
-                    continue
-                signal.strategy = strat.name
-                log.info(f"SIGNAL: {signal.side} {signal.symbol} {signal.timeframe} @ {signal.price}")
-                tg.send(signal)
-                state.mark_alerted(key, signal.timestamp)
+                # evaluate each of the last N closed candles
+                for i in range(-backfill, 0):
+                    window = df.iloc[:len(df) + i] if i != -1 else df
+                    if len(window) < 50:
+                        continue
+                    signal = strat.evaluate(window)
+                    if signal is None:
+                        continue
+                    key = f"{signal.symbol}|{signal.timeframe}|{strat.name}"
+                    if state.already_alerted(key, signal.timestamp):
+                        continue
+                    signal.strategy = strat.name
+                    age = (df.iloc[-1]["timestamp"] - signal.timestamp).total_seconds() / 60
+                    log.info(f"SIGNAL: {signal.side} {signal.symbol} {signal.timeframe} "
+                             f"@ {signal.price} (candle {signal.timestamp}, {age:.0f}m old)")
+                    tg.send(signal)
+                    state.mark_alerted(key, signal.timestamp)
         except Exception as e:
             log.error(f"[{symbol} {timeframe}] one-shot error: {e}")
         return
+
 
     # Daemon mode (local): poll forever.
     for candle in poller.poll_forever():
