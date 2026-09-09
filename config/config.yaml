@@ -1,19 +1,17 @@
-# exchange:
-#   name: binanceusdm
-#   api_key: ""
-#   secret: ""
+exchange:
+  name: binanceus
 
-# Every market (symbol + timeframe combo) to watch in parallel
 markets:
-  - symbol: "BTC/USDT:USDT"
+  - symbol: "BTC/USDT"
     timeframe: "5m"
-    exchange: "binanceusdm"
-  - symbol: "BTC/USDT:USDT"
+    exchange: "binanceus"
+  - symbol: "BTC/USDT"
     timeframe: "30m"
-    exchange: "binanceusdm"
-  - symbol: "CL=F"          # WTI crude — Yahoo stopgap ("USOIL" once FXCM is live)
+    exchange: "binanceus"
+  - symbol: "CL=F"
     timeframe: "5m"
     exchange: "yf_oil"
+
 strategies:
   - name: liquidity_pinbars
     enabled: true
@@ -24,8 +22,8 @@ strategies:
 
 alerts:
   telegram:
-    bot_token: "8836956846:AAFL5BEINJ3VhgLc_I4UoSLIj_By1s8Iy9k"
-    chat_id: "1048733397"
+    bot_token: ""
+    chat_id: ""
 
 polling:
   interval_seconds: 5
